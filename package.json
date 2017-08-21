@@ -1,0 +1,15 @@
+{
+    "name": "pokeys-opcua",
+    "version": "0.0.1",
+    "description": "OPC UA interface server for Pokeys Ethernet devices",
+    "license": "MIT",
+    "dependencies": {
+        "dgram": "*",
+        "node-opcua": "*"
+    },
+    "keywords": [ "pokeys" ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/jaka/pokeys-opcua.git"
+    }
+}
