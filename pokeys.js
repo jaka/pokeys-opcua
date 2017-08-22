@@ -93,6 +93,10 @@ module.exports.getInputStatus = function(fn) {
     sendSimplePackage(0xcc, fn);
 }
 
+module.exports.getAnalogInputStatus = function(fn) {
+    sendSimplePackage(0x3a, fn);
+}
+
 module.exports.setOutput = function(pin, state) {
     var i_pin = parseInt(pin);
     if (!i_pin || i_pin < 1 || i_pin > 55)

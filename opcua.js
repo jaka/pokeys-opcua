@@ -1,7 +1,19 @@
+
+const IP = '10.82.4.50'
+
+const updateDelayMS = 100;
+
+/*************************/
 const opcua = require("node-opcua");
 const pokeys = require('./pokeys');
 
-pokeys.connect('10.82.4.50');
+var inputs = [];
+var outputs = [];
+var analoginputs = [];
+var analogoutputs = [];
+
+var inputsState = {};
+var analoginputsState = {};
 
 var server = new opcua.OPCUAServer({
     port: 4334,
@@ -12,18 +24,6 @@ var server = new opcua.OPCUAServer({
         buildDate: new Date(2017, 8, 20)
     }
 });
-
-var inputs = [];
-var outputs = [];
-var analoginputs = [];
-var analogoutputs = [];
-var inputsState = {};
-
-function getPinStatus(pin) {
-    if (!inputsState.hasOwnProperty(pin))
-        return 1;
-    return inputsState[pin];
-}
 
 function construct_my_address_space(server) {
     
@@ -44,8 +44,31 @@ function construct_my_address_space(server) {
             	dataType: 'Boolean',
             	value: {
                 	get: function () {
+                        if (!inputsState.hasOwnProperty(pin))
+                            return opcua.StatusCodes.Bad;
                     	return new opcua.Variant({
                         	dataType: opcua.DataType.Boolean, value: inputsState[pin] ? true : false
+                    	});
+                	}
+            	}
+        	});
+        })(pin);
+    }
+
+    for (var i = 0, len = analoginputs.length; i < len; i++) {
+        var pin = analoginputs[i];
+        (function(pin) {
+			addressSpace.addVariable({
+		    	componentOf: device,
+            	browseName: 'Analog input pin ' + pin.toString(),
+            	nodeId: 'ns=1;s=analog_input' + pin.toString(),
+            	dataType: 'Double',
+            	value: {
+                	get: function () {
+                        if (!analoginputsState[pin])
+                            return opcua.StatusCodes.Bad;
+                    	return new opcua.Variant({
+                        	dataType: opcua.DataType.Double, value: analoginputsState[pin]
                     	});
                 	}
             	}
@@ -96,7 +119,7 @@ function start_server() {
 }
 
 var updateInputs = function(buf) {
-  for (var block = 0; block < 8; block++) {
+  for (var block = 0; block < 7; block++) {
       var inputs = buf.readUInt8(block + 8);
       for (var pin = 1; pin <= 8; pin++) {
           var p = 1 << (pin - 1)
@@ -104,10 +127,17 @@ var updateInputs = function(buf) {
       }
   }
 }
+var updateAnalogInputs = function(buf) {
+  for (var pin = 0; pin < 7; pin++) {
+      var value = buf.readUInt16BE((2 * pin) + 8) / 4096;
+      analoginputsState[41 + pin] = value;
+  }
+}
 
 function inputsWatcher() {
-  pokeys.getInputStatus(updateInputs)
-  setTimeout(inputsWatcher, 100);
+    pokeys.getInputStatus(updateInputs);
+    pokeys.getAnalogInputStatus(updateAnalogInputs);
+    setTimeout(inputsWatcher, updateDelayMS);
 }
 
 var enumeratePins = function(buf) {
@@ -116,25 +146,27 @@ var enumeratePins = function(buf) {
     for (var pin = 1; pin < 56; pin++) {
        var pinSettings = buf.readUInt8(pin + 7);
        if (pinSettings & 0x2)
-         inputs.push(pin);
+           inputs.push(pin);
        if (pinSettings & 0x4)
-         outputs.push(pin);  
+           outputs.push(pin);
        if (pinSettings & 0x8)
-         analoginputs.push(pin);
+           analoginputs.push(pin);
        if (pinSettings & 0x10)
-         analogoutputs.push(pin);
+           analogoutputs.push(pin);
     }
-    console.log('Inputs: ' + inputs);
-    console.log('Outputs: ' + outputs);
-    console.log('Analog inputs: ' + analoginputs);
-    console.log('Analog outputs: ' + analoginputs);
+    console.log('Pin configuration:');
+    console.log('Inputs: ' + inputs.toString());
+    console.log('Outputs: ' + outputs.toString());
+    console.log('Analog inputs: ' + analoginputs.toString());
+    console.log('Analog outputs: ' + analogoutputs.toString());
     inputsWatcher();
     start_server();
 }
 
 var post_initialize = function() {
-    console.log('Initialized');
+    console.log('Server initialized.');
     pokeys.getBlockInputOutputSettings(enumeratePins);
 }
 
+pokeys.connect(IP);
 server.initialize(post_initialize);
