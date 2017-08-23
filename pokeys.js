@@ -31,11 +31,16 @@ var getCallbackNumber = function(buf) {
     return (type * 256) + counter;
 }
 
-var sendSimplePackage = function(type, fn) {
-    const dbuf = Buffer.alloc(8);   
+var createSimplePackage = function(type) {
+    const dbuf = Buffer.alloc(8);
     dbuf.writeUInt8(0xbb, 0);
     dbuf.writeUInt8(type, 1);
     dbuf.writeUInt8(getSequenceNumber(), 6);
+    return dbuf;
+}
+
+var sendSimplePackage = function(type, fn) {
+    const dbuf = createSimplePackage(type);   
     const csm = checksum(dbuf);
     dbuf.writeUInt8(csm, 7);
     const ebuf = Buffer.alloc(64 - 8);
@@ -95,6 +100,32 @@ module.exports.getInputStatus = function(fn) {
 
 module.exports.getAnalogInputStatus = function(fn) {
     sendSimplePackage(0x3a, fn);
+}
+
+module.exports.getEasySensorSettings = function(offset, fn) {
+    const dbuf = createSimplePackage(0x76);
+    dbuf.writeUInt8(offset, 2);
+	dbuf.writeUInt8(4, 3);
+    const csm = checksum(dbuf);
+    dbuf.writeUInt8(csm, 7);
+    const ebuf = Buffer.alloc(64 - 8);
+    const buf = Buffer.concat([dbuf, ebuf]);
+    const cbnum = getCallbackNumber(buf);
+    callbacks[cbnum] = fn;
+    send(buf);
+}
+
+module.exports.getEasySensorValues = function(offset, fn) {
+    const dbuf = createSimplePackage(0x77);
+    dbuf.writeUInt8(offset, 2);
+	dbuf.writeUInt8(14, 3);
+    const csm = checksum(dbuf);
+    dbuf.writeUInt8(csm, 7);
+    const ebuf = Buffer.alloc(64 - 8);
+    const buf = Buffer.concat([dbuf, ebuf]);
+    const cbnum = getCallbackNumber(buf);
+    callbacks[cbnum] = fn;
+    send(buf);
 }
 
 module.exports.setOutput = function(pin, state) {
