@@ -61,14 +61,28 @@ function constructEasySensorAddressSpace() {
 function easySensorWatcher() {
     o = 0;
     var getThirteenEasySensorValues = function () {
-        pokeys.getEasySensorValues(o, function(buf) {
-            for (i = 0; i < 12; i++) {
-                if (easySensors.indexOf(o + i) != -1) {
-                    var sensor = easySensorsState[o + i] | {};
-                    sensor.value = buf.readUInt16LE(8 + (2 * i)) / 100.0;
+        var go = 0;
+        for (i = 0; i < 13; i++)
+             if (easySensors.indexOf(o + i) != -1)
+                 go = 1;
+        if (go) {
+            pokeys.getEasySensorValues(o, function(buf) {
+                for (i = 0; i < 13; i++) {
+                    if (easySensors.indexOf(o + i) != -1) {
+                        var sensor = easySensorsState[o + i] || {};
+                        sensor.value = buf.readUInt16LE(8 + (4 * i)) / 100.0;
+                    }
                 }
-            }
-        });
+                o += 13;
+                if (o < 99)
+                    setTimeout(getThirteenEasySensorValues, updateDelayMS / 5);
+            });
+        }
+        else {
+            o += 13;
+            if (o < 99)
+                getThirteenEasySensorValues();
+        }
     };
     getThirteenEasySensorValues();
     setTimeout(easySensorWatcher, 5 * updateDelayMS);
