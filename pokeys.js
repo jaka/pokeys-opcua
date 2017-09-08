@@ -1,3 +1,4 @@
+const async = require('async');
 const dgram = require('dgram');
 
 const PORT = 20055;
@@ -7,7 +8,53 @@ var ip_addr;
 var counter = 0;
 var callbacks = {};
 
-var checksum = function(buf) {
+var queue = async.queue(work, 1);
+var to = null;
+
+function send(buf) {
+    if (!sock) {
+      return;
+    }
+    sock.send(buf, 0, buf.length, PORT, ip_addr, function(err, bytes) {
+        if (err)
+             console.log(err);
+        msg = null;
+    });
+}
+
+function work(item, cb) {
+  var callback = function(buf) {
+    if (to) {
+      clearTimeout(to);
+      to = null;
+    }
+    cb(buf);
+  };
+  if (!item.hasOwnProperty('buf')) {
+    return cb();
+  }
+  send(item.buf);
+  const cbnum = getCallbackNumber(item.buf);
+  callbacks[cbnum] = callback;
+  to = setTimeout(callback, 1000);
+}
+
+function getSequenceNumber() {
+    var c = counter || 0;
+    c++;
+    if (c > 0xff)
+        c = 0;
+    counter = c;
+    return counter;
+};
+
+var getCallbackNumber = function(buf) {
+    const type = buf.readUInt8(1);
+    const counter = buf.readUInt8(6);
+    return (type * 256) + counter;
+}
+
+function checksum(buf) {
     if (buf.length < 8)
         return 0;
     var sum = 0;
@@ -16,49 +63,27 @@ var checksum = function(buf) {
     return sum % 256;
 };
 
-var getSequenceNumber = function() {
-    var c = counter || 0;
-    c++;
-    if (c > 0xff)
-        c = 0;
-    counter = c;
-    return counter;
-}
-
-var getCallbackNumber = function(buf) {
-    const type = buf.readUInt8(1);
-    const counter = buf.readUInt8(6);
-    return (type * 256) + counter;
+function sendPackage(buf, fn) {
+    const counter = getSequenceNumber();
+    buf.writeUInt8(counter, 6);
+    const csm = checksum(buf);
+    buf.writeUInt8(csm, 7);
+    var work = {
+        buf: buf
+    };
+    queue.push(work, fn);
 }
 
 var createSimplePackage = function(type) {
-    const dbuf = Buffer.alloc(8);
-    dbuf.writeUInt8(0xbb, 0);
-    dbuf.writeUInt8(type, 1);
-    dbuf.writeUInt8(getSequenceNumber(), 6);
-    return dbuf;
+    const buf = Buffer.alloc(64);
+    buf.writeUInt8(0xbb, 0);
+    buf.writeUInt8(type, 1);
+    return buf;
 }
 
 var sendSimplePackage = function(type, fn) {
-    const dbuf = createSimplePackage(type);   
-    const csm = checksum(dbuf);
-    dbuf.writeUInt8(csm, 7);
-    const ebuf = Buffer.alloc(64 - 8);
-    const buf = Buffer.concat([dbuf, ebuf]);
-    const cbnum = getCallbackNumber(buf);
-    callbacks[cbnum] = fn;
-    send(buf);
-}
-
-var send = function(buf) {
-    if (!sock)
-        return;
-    sock.send(buf, 0, buf.length, PORT, ip_addr, function(err, bytes) {
-        if (err) {
-             console.log(err);
-        }
-        msg = null;
-    });
+    const buf = createSimplePackage(type);
+    sendPackage(buf, fn);
 }
 
 module.exports.connect = function(ip_address) {
@@ -80,6 +105,7 @@ module.exports.connect = function(ip_address) {
         const direction = msg.readUInt8(0);
         if (direction != 0xaa)
             return;
+
         const cbnum = getCallbackNumber(msg);
         if (callbacks.hasOwnProperty(cbnum)) {
             var fn = callbacks[cbnum];
@@ -103,44 +129,25 @@ module.exports.getAnalogInputStatus = function(fn) {
 }
 
 module.exports.getEasySensorSettings = function(offset, fn) {
-    const dbuf = createSimplePackage(0x76);
-    dbuf.writeUInt8(offset, 2);
-	dbuf.writeUInt8(4, 3);
-    const csm = checksum(dbuf);
-    dbuf.writeUInt8(csm, 7);
-    const ebuf = Buffer.alloc(64 - 8);
-    const buf = Buffer.concat([dbuf, ebuf]);
-    const cbnum = getCallbackNumber(buf);
-    callbacks[cbnum] = fn;
-    send(buf);
+    const buf = createSimplePackage(0x76);
+    buf.writeUInt8(offset, 2);
+	buf.writeUInt8(4, 3);
+    sendPackage(buf, fn);
 }
 
 module.exports.getEasySensorValues = function(offset, fn) {
-    const dbuf = createSimplePackage(0x77);
-    dbuf.writeUInt8(offset, 2);
-	dbuf.writeUInt8(14, 3);
-    const csm = checksum(dbuf);
-    dbuf.writeUInt8(csm, 7);
-    const ebuf = Buffer.alloc(64 - 8);
-    const buf = Buffer.concat([dbuf, ebuf]);
-    const cbnum = getCallbackNumber(buf);
-    callbacks[cbnum] = fn;
-    send(buf);
+    const buf = createSimplePackage(0x77);
+    buf.writeUInt8(offset, 2);
+	buf.writeUInt8(14, 3);
+    sendPackage(buf, fn);
 }
 
 module.exports.setOutput = function(pin, state) {
     var i_pin = parseInt(pin);
     if (!i_pin || i_pin < 1 || i_pin > 55)
-         return;
-    const dbuf = Buffer.alloc(8);   
-    dbuf.writeUInt8(0xbb, 0);
-    dbuf.writeUInt8(0x40, 1);
-    dbuf.writeUInt8(i_pin - 1, 2);
-    dbuf.writeUInt8(state ? 0 : 1, 3);
-    dbuf.writeUInt8(getSequenceNumber(), 6);
-    const csm = checksum(dbuf);
-    dbuf.writeUInt8(csm, 7);
-    const ebuf = Buffer.alloc(64 - 8);
-    const buf = Buffer.concat([dbuf, ebuf]);
-    send(buf);
+        return;
+    const buf = createSimplePackage(0x40);
+    buf.writeUInt8(i_pin - 1, 2);
+    buf.writeUInt8(state ? 0 : 1, 3);
+    sendPackage(buf, function(buf) {});
 }

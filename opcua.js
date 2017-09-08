@@ -23,7 +23,7 @@ var server = new opcua.OPCUAServer({
     buildInfo : {
         productName: "Pokeys57E",
         buildNumber: "1",
-        buildDate: new Date(2017, 8, 22)
+        buildDate: new Date(2017, 9, 8)
     }
 });
 var device;
@@ -31,8 +31,7 @@ var device;
 /* EasySensors */
 
 function constructEasySensorAddressSpace() {
-    console.log('EasySensors configuration:');
-    console.log(easySensors);
+    console.log('EasySensors configuration: ' + easySensors.toString());
 
     const addressSpace = server.engine.addressSpace;
 
@@ -89,6 +88,8 @@ function easySensorWatcher() {
 }
 
 var enumerateEasySensors = function(o, buf) {
+    if (!buf)
+        return;
     for (var i = 0; i < 4; i++) {
         const offset = (12 * i) + 8;
         const type = buf.readUInt8(offset);
@@ -205,15 +206,19 @@ function constructIOAddressSpace() {
 }
 
 var updateInputs = function(buf) {
-  for (var block = 0; block < 7; block++) {
-      var inputs = buf.readUInt8(block + 8);
-      for (var pin = 1; pin <= 8; pin++) {
-          var p = 1 << (pin - 1)
-          inputsState[8 * block + pin] = inputs & p ? 1 : 0;
-      }
-  }
+    if (!buf)
+        return;
+    for (var block = 0; block < 7; block++) {
+        var inputs = buf.readUInt8(block + 8);
+        for (var pin = 1; pin <= 8; pin++) {
+            var p = 1 << (pin - 1)
+            inputsState[8 * block + pin] = inputs & p ? 1 : 0;
+        }
+    }
 }
 var updateAnalogInputs = function(buf) {
+    if (!buf)
+        return;
     for (var pin = 0; pin < 7; pin++) {
         var value = buf.readUInt16BE((2 * pin) + 8) / 4096;
         analoginputsState[41 + pin] = value;
@@ -227,6 +232,8 @@ function IOWatcher() {
 }
 
 var enumerateIO = function(buf) {
+    if (!buf)
+        return;
     for (var pin = 1; pin < 56; pin++) {
         var pinSettings = buf.readUInt8(pin + 7);
         if (pinSettings & 0x2)
