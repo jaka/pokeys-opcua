@@ -4,7 +4,7 @@ const dgram = require('dgram');
 const PORT = 20055;
 
 var sock = null;
-var ip_addr;
+var ip_addr = null;
 var counter = 0;
 var callbacks = {};
 
@@ -13,7 +13,7 @@ var to = null;
 
 function send(buf) {
     if (!sock) {
-      return;
+        return;
     }
     sock.send(buf, 0, buf.length, PORT, ip_addr, function(err, bytes) {
         if (err)
@@ -23,20 +23,24 @@ function send(buf) {
 }
 
 function work(item, cb) {
-  var callback = function(buf) {
-    if (to) {
-      clearTimeout(to);
-      to = null;
+    var callbackTimeOut = function(buf) {
+        to = null;
+        cb('Timeout occured!', null);
     }
-    cb(buf);
-  };
-  if (!item.hasOwnProperty('buf')) {
-    return cb();
-  }
-  send(item.buf);
-  const cbnum = getCallbackNumber(item.buf);
-  callbacks[cbnum] = callback;
-  to = setTimeout(callback, 1000);
+    var callback = function(buf) {
+        if (to) {
+            clearTimeout(to);
+            to = null;
+        }
+        cb(null, buf);
+    };
+    if (!item.hasOwnProperty('buf')) {
+        return cb();
+    }
+    send(item.buf);
+    const cbnum = getCallbackNumber(item.buf);
+    callbacks[cbnum] = callback;
+    to = setTimeout(callbackTimeOut, 1000);
 }
 
 function getSequenceNumber() {
@@ -86,6 +90,8 @@ var sendSimplePackage = function(type, fn) {
     sendPackage(buf, fn);
 }
 
+/* ****** */
+
 module.exports.connect = function(ip_address) {
     ip_addr = ip_address;
     var opts = {
@@ -105,7 +111,6 @@ module.exports.connect = function(ip_address) {
         const direction = msg.readUInt8(0);
         if (direction != 0xaa)
             return;
-
         const cbnum = getCallbackNumber(msg);
         if (callbacks.hasOwnProperty(cbnum)) {
             var fn = callbacks[cbnum];
@@ -149,5 +154,5 @@ module.exports.setOutput = function(pin, state) {
     const buf = createSimplePackage(0x40);
     buf.writeUInt8(i_pin - 1, 2);
     buf.writeUInt8(state ? 0 : 1, 3);
-    sendPackage(buf, function(buf) {});
+    sendPackage(buf, function(err, buf) {});
 }

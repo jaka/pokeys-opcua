@@ -65,7 +65,9 @@ function easySensorWatcher() {
              if (easySensors.indexOf(o + i) != -1)
                  go = 1;
         if (go) {
-            pokeys.getEasySensorValues(o, function(buf) {
+            pokeys.getEasySensorValues(o, function(err, buf) {
+                if (err || !buf)
+                    return;
                 for (i = 0; i < 13; i++) {
                     if (easySensors.indexOf(o + i) != -1) {
                         var sensor = easySensorsState[o + i] || {};
@@ -84,7 +86,7 @@ function easySensorWatcher() {
         }
     };
     getThirteenEasySensorValues();
-    setTimeout(easySensorWatcher, 5 * updateDelayMS);
+    setTimeout(easySensorWatcher, 3 * updateDelayMS);
 }
 
 var enumerateEasySensors = function(o, buf) {
@@ -106,11 +108,13 @@ var enumerateEasySensors = function(o, buf) {
 var initializeEasySensors = function() {
     var offset = 0;
     var getFourEasySensor = function () {
-        pokeys.getEasySensorSettings(offset, function(buf) {
+        pokeys.getEasySensorSettings(offset, function(err, buf) {
+            if (err || !buf)
+                return;
             enumerateEasySensors(offset, buf);
             offset += 4;
             if (offset < 99)
-                setTimeout(getFourEasySensor, 200);
+                setTimeout(getFourEasySensor, 100);
             else {
                 easySensorWatcher();
                 constructEasySensorAddressSpace();
@@ -205,8 +209,8 @@ function constructIOAddressSpace() {
     }
 }
 
-var updateInputs = function(buf) {
-    if (!buf)
+var updateInputs = function(err, buf) {
+    if (err || !buf)
         return;
     for (var block = 0; block < 7; block++) {
         var inputs = buf.readUInt8(block + 8);
@@ -216,8 +220,8 @@ var updateInputs = function(buf) {
         }
     }
 }
-var updateAnalogInputs = function(buf) {
-    if (!buf)
+var updateAnalogInputs = function(err, buf) {
+    if (err || !buf)
         return;
     for (var pin = 0; pin < 7; pin++) {
         var value = buf.readUInt16BE((2 * pin) + 8) / 4096;
@@ -231,8 +235,8 @@ function IOWatcher() {
     setTimeout(IOWatcher, updateDelayMS);
 }
 
-var enumerateIO = function(buf) {
-    if (!buf)
+var enumerateIO = function(err, buf) {
+    if (err || !buf)
         return;
     for (var pin = 1; pin < 56; pin++) {
         var pinSettings = buf.readUInt8(pin + 7);
