@@ -23,7 +23,7 @@ var server = new opcua.OPCUAServer({
     buildInfo : {
         productName: "Pokeys57E",
         buildNumber: "1",
-        buildDate: new Date(2017, 9, 8)
+        buildDate: new Date(2017, 10, 3)
     }
 });
 var device;
@@ -86,7 +86,6 @@ function easySensorWatcher() {
         }
     };
     getThirteenEasySensorValues();
-    setTimeout(easySensorWatcher, 3 * updateDelayMS);
 }
 
 var enumerateEasySensors = function(o, buf) {
@@ -116,7 +115,7 @@ var initializeEasySensors = function() {
             if (offset < 99)
                 setTimeout(getFourEasySensor, 100);
             else {
-                easySensorWatcher();
+                setInterval(easySensorWatcher, 3 * updateDelayMS);
                 constructEasySensorAddressSpace();
             }
         });
@@ -202,7 +201,7 @@ function constructIOAddressSpace() {
                             state = !!variant.value;
                         pokeys.setOutput(pin, state);
                     	return opcua.StatusCodes.Good;
-                	}
+                    }
                 }
            });
         })(pin);
@@ -232,7 +231,6 @@ var updateAnalogInputs = function(err, buf) {
 function IOWatcher() {
     pokeys.getInputStatus(updateInputs);
     pokeys.getAnalogInputStatus(updateAnalogInputs);
-    setTimeout(IOWatcher, updateDelayMS);
 }
 
 var enumerateIO = function(err, buf) {
@@ -249,7 +247,7 @@ var enumerateIO = function(err, buf) {
         if (pinSettings & 0x10)
             analogoutputs.push(pin);
     }
-    IOWatcher();
+    setInterval(IOWatcher, updateDelayMS);
     constructIOAddressSpace();
 }
 
